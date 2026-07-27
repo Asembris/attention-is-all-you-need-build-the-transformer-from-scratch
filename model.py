@@ -266,8 +266,13 @@ def merge_heads_back_to_model_dim(multi_head_tensor):
     res=torch.reshape(res,(b,seq_len,num_heads*d_k))
     return res
 
-# Step 26 - apply_linear_projection (not yet solved)
-# TODO: implement
+# Step 26 - apply_linear_projection
+def apply_linear_projection(x, weight, bias):
+    # TODO: return x @ weight^T + bias (bias may be None) with shape (..., out_features)
+    res= x @ torch.transpose(weight,0,1)
+    if bias is not None:
+        res+=bias
+    return res
 
 # Step 27 - project_to_query_key_value (not yet solved)
 # TODO: implement
