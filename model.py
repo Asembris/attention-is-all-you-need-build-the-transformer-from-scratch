@@ -483,8 +483,33 @@ def apply_log_softmax_over_vocab(logits):
     res=torch.log(soft_prob)
     return res
 
-# Step 51 - run_transformer_forward (not yet solved)
-# TODO: implement
+# Step 51 - run_transformer_forward
+def run_transformer_forward(src_ids, tgt_ids, model_params, num_heads, pad_id):
+    # TODO: embed src+tgt, add PE, build masks, run encoder/decoder, project to log probs.
+    d_model=model_params["token_embedding"].size(-1)
+    src_seq=src_ids.size(-1)
+    tgt_seq=tgt_ids.size(-1)
+    embed=model_params["token_embedding"]
+    src=embed[src_ids]
+    tgt=embed[tgt_ids]
+    src=scale_embeddings_by_sqrt_d_model(src, d_model)
+    tgt=scale_embeddings_by_sqrt_d_model(tgt, d_model)
+    pe=build_sinusoidal_positional_encoding(max(src_seq,tgt_seq), d_model)
+    src=add_positional_encoding_to_embeddings(src, pe)
+    tgt=add_positional_encoding_to_embeddings(tgt, pe)
+
+    src_mask=build_padding_mask(src_ids, pad_id)
+    tgt_pad_mask=build_padding_mask(tgt_ids, pad_id)
+
+    tgt_causal_mask=build_causal_mask(tgt_seq)
+    tgt_mask=combine_padding_and_causal_masks(tgt_pad_mask,tgt_causal_mask)
+
+    encoder_output=stack_encoder_layers(src,model_params["encoder_layers"], num_heads, src_mask)
+
+    decoder_output=stack_decoder_layers(tgt, encoder_output, model_params["decoder_layers"], num_heads, src_mask, tgt_mask)
+    logits=apply_final_output_projection(decoder_output,model_params["output_projection"])
+    res=apply_log_softmax_over_vocab(logits)
+    return res
 
 # Step 52 - init_encoder_layer_parameters (not yet solved)
 # TODO: implement
