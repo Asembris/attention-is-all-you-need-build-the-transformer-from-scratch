@@ -556,8 +556,20 @@ def init_decoder_layer_parameters(d_model,num_heads,d_ff):
     ffn_beta=torch.zeros((d_model,),dtype=torch.float32,requires_grad=True)
     return {"w_q_self":w_q_self,"w_k_self":w_k_self,"w_v_self":w_v_self,"w_o_self":w_o_self,"w_q_cross":w_q_cross,"w_k_cross":w_k_cross,"w_v_cross":w_v_cross,"w_o_cross":w_o_cross,"w1":w1,"b1":b1,"w2":w2,"b2":b2,"self_gamma":self_gamma,"self_beta":self_beta,"cross_gamma":cross_gamma,"cross_beta":cross_beta,"ffn_gamma":ffn_gamma,"ffn_beta":ffn_beta}
 
-# Step 54 - init_embedding_and_projection_parameters (not yet solved)
-# TODO: implement
+# Step 54 - init_embedding_and_projection_parameters
+import torch
+
+def init_embedding_and_projection_parameters(vocab_size, d_model, tie_weights=True):
+    """Allocate src/tgt embeddings and output projection (optionally tied)."""
+    # TODO: allocate three (vocab_size, d_model) tensors with requires_grad=True
+    src=torch.randn((vocab_size,d_model),dtype=torch.float32,requires_grad=True)
+    tgt=torch.randn((vocab_size,d_model),dtype=torch.float32,requires_grad=True)
+    if tie_weights:
+        output_projection=tgt
+    else:
+        output_projection=torch.randn((vocab_size,d_model),dtype=torch.float32,requires_grad=True)
+    d={"output_projection":output_projection,"src_embedding":src,"tgt_embedding":tgt}
+    return d
 
 # Step 55 - collect_model_parameters_into_list (not yet solved)
 # TODO: implement
