@@ -900,8 +900,15 @@ def select_top_k_candidates(candidate_scores,k):
     token_ids=flat_indices%vocab_size
     return {"beam_indices":beam_indices,"token_ids":token_ids,"scores":top_scores}
 
-# Step 78 - append_tokens_to_beam_sequences (not yet solved)
-# TODO: implement
+# Step 78 - append_tokens_to_beam_sequences
+import torch
+
+def append_tokens_to_beam_sequences(beam_sequences, beam_indices, token_ids):
+    # TODO: gather parent beam rows and append the new token ids as the last column
+    parent_sequences=beam_sequences[beam_indices]
+    new_tokens=token_ids.unsqueeze(-1)
+    res=torch.cat((parent_sequences,new_tokens),dim=-1)
+    return res
 
 # Step 79 - mark_finished_beams (not yet solved)
 # TODO: implement
