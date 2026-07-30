@@ -734,37 +734,80 @@ def zero_all_parameter_gradients(parameter_list):
 def compute_batch_training_loss(src_batch,tgt_batch,model_params,config):
     shifted_tgt=shift_targets_right_with_start_token(tgt_batch,config["start_id"])
 
-    model_params["token_embedding"]=model_params["tgt_embedding"]
+    src_embedding=model_params["src_embedding"]
+    tgt_embedding=model_params["tgt_embedding"]
+    model_params["token_embedding"]=tgt_embedding
 
-    log_probs=run_transformer_forward(
-        src_batch,
-        shifted_tgt,
-        model_params,
+    d_model=src_embedding.size(-1)
+
+    src=src_embedding[src_batch]
+    tgt=tgt_embedding[shifted_tgt]
+
+    # Keep embeddings connected to autograd; do not call the old helper that uses torch.tensor(...)
+    src=src*(d_model**0.5)
+    tgt=tgt*(d_model**0.5)
+
+    src_len=src_batch.size(-1)
+    tgt_len=shifted_tgt.size(-1)
+
+    pe=build_sinusoidal_positional_encoding(max(src_len,tgt_len),d_model)
+    pe=pe.to(device=src.device,dtype=src.dtype)
+
+    src=add_positional_encoding_to_embeddings(src,pe)
+    tgt=add_positional_encoding_to_embeddings(tgt,pe)
+
+    src_mask=build_padding_mask(src_batch,config["pad_id"])
+    tgt_padding_mask=build_padding_mask(shifted_tgt,config["pad_id"])
+    tgt_causal_mask=build_causal_mask(tgt_len).to(shifted_tgt.device)
+    tgt_mask=combine_padding_and_causal_masks(tgt_padding_mask,tgt_causal_mask)
+
+    encoder_output=stack_encoder_layers(
+        src,
+        model_params["encoder_layers"],
         config["num_heads"],
-        config["pad_id"]
+        src_mask
     )
 
-    smoothed_target=build_uniform_smoothing_distribution(
+    decoder_output=stack_decoder_layers(
+        tgt,
+        encoder_output,
+        model_params["decoder_layers"],
+        config["num_heads"],
+        src_mask,
+        tgt_mask
+    )
+
+    logits=apply_final_output_projection(
+        decoder_output,
+        model_params["output_projection"]
+    )
+
+    log_probs=apply_log_softmax_over_vocab(logits)
+
+    smoothing=config["smoothing"]
+    confidence=1.0-smoothing
+
+    smoothed_targets=build_uniform_smoothing_distribution(
         log_probs.shape,
         config["vocab_size"],
-        config["smoothing"]
+        smoothing
     ).to(device=log_probs.device,dtype=log_probs.dtype)
 
-    smoothed_target=set_confidence_on_gold_tokens(
-        smoothed_target,
+    smoothed_targets=set_confidence_on_gold_tokens(
+        smoothed_targets,
         tgt_batch,
-        1.0-config["smoothing"]
+        confidence
     )
 
-    smoothed_target=zero_pad_column_and_pad_token_rows(
-        smoothed_target,
+    smoothed_targets=zero_pad_column_and_pad_token_rows(
+        smoothed_targets,
         tgt_batch,
         config["pad_id"]
     )
 
     total_loss=compute_label_smoothed_kl_loss(
         log_probs,
-        smoothed_target
+        smoothed_targets
     )
 
     loss=average_loss_over_non_pad_tokens(
@@ -775,8 +818,41 @@ def compute_batch_training_loss(src_batch,tgt_batch,model_params,config):
 
     return loss
 
-# Step 72 - run_training_step_with_backprop (not yet solved)
-# TODO: implement
+# Step 72 - run_training_step_with_backprop
+import torch
+
+def run_training_step_with_backprop(src_batch,tgt_batch,parameter_list,model_params,optimizer_state,step_number,config):
+    """Run one training iteration: zero grads, forward, backward, Noam LR, Adam step.
+
+    Returns the scalar loss value for the step as a Python float.
+    """
+    zero_all_parameter_gradients(parameter_list)
+
+    loss=compute_batch_training_loss(
+        src_batch,
+        tgt_batch,
+        model_params,
+        config
+    )
+
+    loss.backward()
+
+    learning_rate=compute_noam_learning_rate(
+        step_number,
+        config["d_model"],
+        config["warmup_steps"]
+    )
+
+    apply_adam_step_to_all_parameters(
+        parameter_list,
+        optimizer_state,
+        learning_rate,
+        config.get("beta1",0.9),
+        config.get("beta2",0.98),
+        config.get("epsilon",1e-9)
+    )
+
+    return loss.item()
 
 # Step 73 - run_training_loop_for_steps (not yet solved)
 # TODO: implement
