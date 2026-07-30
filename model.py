@@ -730,8 +730,50 @@ def zero_all_parameter_gradients(parameter_list):
     for param in parameter_list:
         param.grad=None
 
-# Step 71 - compute_batch_training_loss (not yet solved)
-# TODO: implement
+# Step 71 - compute_batch_training_loss
+def compute_batch_training_loss(src_batch,tgt_batch,model_params,config):
+    shifted_tgt=shift_targets_right_with_start_token(tgt_batch,config["start_id"])
+
+    model_params["token_embedding"]=model_params["tgt_embedding"]
+
+    log_probs=run_transformer_forward(
+        src_batch,
+        shifted_tgt,
+        model_params,
+        config["num_heads"],
+        config["pad_id"]
+    )
+
+    smoothed_target=build_uniform_smoothing_distribution(
+        log_probs.shape,
+        config["vocab_size"],
+        config["smoothing"]
+    ).to(device=log_probs.device,dtype=log_probs.dtype)
+
+    smoothed_target=set_confidence_on_gold_tokens(
+        smoothed_target,
+        tgt_batch,
+        1.0-config["smoothing"]
+    )
+
+    smoothed_target=zero_pad_column_and_pad_token_rows(
+        smoothed_target,
+        tgt_batch,
+        config["pad_id"]
+    )
+
+    total_loss=compute_label_smoothed_kl_loss(
+        log_probs,
+        smoothed_target
+    )
+
+    loss=average_loss_over_non_pad_tokens(
+        total_loss,
+        tgt_batch,
+        config["pad_id"]
+    )
+
+    return loss
 
 # Step 72 - run_training_step_with_backprop (not yet solved)
 # TODO: implement
